@@ -80,7 +80,6 @@ pipeline {
     
      # Update Helm values
 sed -i "s|  tag:.*|  tag: \"${IMAGE_TAG}\"|g" helm/front-end/values.yaml
-
     # Commit and push
     git config user.email "jenkins@sockshop.com"
     git config user.name "Jenkins"
