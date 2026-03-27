@@ -77,6 +77,9 @@ pipeline {
 
     # Update image tag
     sed -i 's|image: vipparlasandeepcharan/front-end:.*|image: vipparlasandeepcharan/front-end:${IMAGE_TAG}|g' manifests/front-end/deployment.yaml
+    
+     # Update Helm values
+    sed -i 's|tag:.*|tag: "${IMAGE_TAG}"|g' helm/front-end/values.yaml
 
     # Commit and push
     git config user.email "jenkins@sockshop.com"
