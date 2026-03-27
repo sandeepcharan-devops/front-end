@@ -14,6 +14,22 @@ pipeline {
             }
         }
 
+
+	stage('Unit Tests') {
+    steps {
+        sh 'yarn install'
+        sh 'yarn test'
+    }
+    post {
+        always {
+            echo 'Unit test stage completed'
+        }
+        failure {
+            echo 'Unit tests failed — stopping pipeline'
+        }
+    }
+}
+
         stage('Build Docker Image') {
             steps {
                 sh """
