@@ -1,35 +1,30 @@
 pipeline {
     agent any
-
     environment {
         DOCKERHUB_CREDS = credentials('dockerhub-creds')
         IMAGE_NAME = "vipparlasandeepcharan/front-end"
         IMAGE_TAG = "v1.${BUILD_NUMBER}"
     }
-
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
-
-
-	stage('Unit Tests') {
-    steps {
-        sh 'yarn install'
-        sh 'yarn test'
-    }
-    post {
-        always {
-            echo 'Unit test stage completed'
+        stage('Unit Tests') {
+            steps {
+                sh 'yarn install'
+                sh 'yarn test'
+            }
+            post {
+                always {
+                    echo 'Unit test stage completed'
+                }
+                failure {
+                    echo 'Unit tests failed — stopping pipeline'
+                }
+            }
         }
-        failure {
-            echo 'Unit tests failed — stopping pipeline'
-        }
-    }
-}
-
         stage('Build Docker Image') {
             steps {
                 sh """
@@ -37,7 +32,6 @@ pipeline {
                 """
             }
         }
-
         stage('Trivy Scan') {
             steps {
                 sh """
@@ -48,7 +42,6 @@ pipeline {
                 """
             }
         }
-
         stage('Push to Docker Hub') {
             steps {
                 sh """
@@ -59,45 +52,37 @@ pipeline {
                 """
             }
         }
+        stage('Update GitOps Repo') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-creds',
+                    usernameVariable: 'GIT_USER',
+                    passwordVariable: 'GIT_TOKEN'
+                )]) {
+                    sh """
+                        rm -rf sockshop-gitops
+                        git clone https://${GIT_USER}:${GIT_TOKEN}@github.com/sandeepcharan-devops/sockshop-gitops.git
+                        cd sockshop-gitops
 
-	stage('Update GitOps Repo') {
-    steps {
-        withCredentials([usernamePassword(
-            credentialsId: 'github-creds',
-            usernameVariable: 'GIT_USER',
-            passwordVariable: 'GIT_TOKEN'
-        )]) {
-            sh """
-    # Remove if exists from previous build
-    rm -rf sockshop-gitops
+                        sed -i 's|image: vipparlasandeepcharan/front-end:.*|image: vipparlasandeepcharan/front-end:${IMAGE_TAG}|g' manifests/front-end/deployment.yaml
 
-    # Clone GitOps repo
-    git clone https://${GIT_USER}:${GIT_TOKEN}@github.com/sandeepcharan-devops/sockshop-gitops.git
-    cd sockshop-gitops
+                        sed -i 's|  tag:.*|  tag: "'${IMAGE_TAG}'"|g' helm/front-end/values.yaml
 
-    # Update image tag
-    sed -i 's|image: vipparlasandeepcharan/front-end:.*|image: vipparlasandeepcharan/front-end:${IMAGE_TAG}|g' manifests/front-end/deployment.yaml
-    
-     # Update Helm values
-sed -i "s|  tag:.*|  tag: \"${IMAGE_TAG}\"|g" helm/front-end/values.yaml
-    # Commit and push
-    git config user.email "jenkins@sockshop.com"
-    git config user.name "Jenkins"
-    git add manifests/front-end/deployment.yaml
-    git commit -m "ci: update front-end image to ${IMAGE_TAG}"
-    git push origin main
-"""
+                        git config user.email "jenkins@sockshop.com"
+                        git config user.name "Jenkins"
+                        git add manifests/front-end/deployment.yaml helm/front-end/values.yaml
+                        git commit -m "ci: update front-end image to ${IMAGE_TAG}"
+                        git push origin main
+                    """
+                }
+            }
         }
-    }
-}
-
         stage('Cleanup') {
             steps {
                 sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG}"
             }
         }
     }
-
     post {
         failure {
             echo 'Pipeline failed — image not pushed'
